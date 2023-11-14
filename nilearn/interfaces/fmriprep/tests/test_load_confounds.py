@@ -308,13 +308,21 @@ def test_motion(tmp_path, motion, param, expected_suffixes):
             assert f"{param}{suff}" not in conf.columns
 
 
-@pytest.mark.parametrize("compcor,n_compcor,test_keyword,test_n",
-                         [("anat_combined", 2, "a_comp_cor_", 2),
-                          ("anat_combined", "all", "a_comp_cor_", 57),
-                          ("temporal", "all", "t_comp_cor_", 6)])
-def test_n_compcor(tmp_path, compcor, n_compcor, test_keyword, test_n):
+@pytest.mark.parametrize(
+    "compcor,n_compcor,test_keyword,test_n,fmriprep_version",
+    [("anat_combined", 2, "a_comp_cor_", 2, "1.4.x"),
+     ("anat_separated", 2, "a_comp_cor_", 4, "1.4.x"),
+     ("anat_combined", "all", "a_comp_cor_", 57, "1.4.x"),
+     ("temporal", "all", "t_comp_cor_", 6, "1.4.x"),
+     ("anat_combined", 2, "a_comp_cor_", 2, "21.x.x"),
+     ("anat_separated", "all", "w_comp_cor_", 4, "21.x.x"),
+     ("temporal_anat_separated", "all", "c_comp_cor_", 3, "21.x.x"),
+     ("temporal", "all", "t_comp_cor_", 3, "21.x.x")])
+def test_n_compcor(tmp_path, compcor, n_compcor, test_keyword, test_n,
+                   fmriprep_version):
     img_nii, _ = create_tmp_filepath(
-        tmp_path, copy_confounds=True, copy_json=True
+        tmp_path, copy_confounds=True, copy_json=True,
+        fmriprep_version=fmriprep_version
     )
     conf, _ = load_confounds(
         img_nii, strategy=("high_pass", "compcor", ), compcor=compcor,
@@ -332,21 +340,21 @@ def test_not_found_exception(tmp_path):
     missing_params = ["trans_y", "trans_x_derivative1", "rot_z_power2"]
     missing_keywords = ["cosine", "global_signal"]
 
-    leagal_confounds = pd.read_csv(bad_conf, delimiter="\t", encoding="utf-8")
+    legal_confounds = pd.read_csv(bad_conf, delimiter="\t", encoding="utf-8")
     remove_columns = []
     for missing_kw in missing_keywords:
         remove_columns += [
             col_name
-            for col_name in leagal_confounds.columns
+            for col_name in legal_confounds.columns
             if missing_kw in col_name
         ]
 
     aroma = [
         col_name
-        for col_name in leagal_confounds.columns
+        for col_name in legal_confounds.columns
         if "aroma" in col_name
     ]
-    missing_confounds = leagal_confounds.drop(
+    missing_confounds = legal_confounds.drop(
         columns=missing_params + remove_columns + aroma
     )
     missing_confounds.to_csv(bad_conf, sep="\t", index=False)
@@ -453,13 +461,13 @@ def test_invalid_filetype(tmp_path, rng):
     """Invalid file types/associated files for load method."""
     bad_nii, bad_conf = create_tmp_filepath(tmp_path,
                                             copy_confounds=True,
-                                            old_derivative_suffix=False)
+                                            fmriprep_version="1.4.x")
     _, _ = load_confounds(bad_nii)
 
     # more than one legal filename for confounds
     add_conf = "sub-test01_task-test_desc-confounds_regressors.tsv"
-    leagal_confounds, _ = get_legal_confound()
-    leagal_confounds.to_csv(tmp_path / add_conf, sep="\t", index=False)
+    legal_confounds, _ = get_legal_confound()
+    legal_confounds.to_csv(tmp_path / add_conf, sep="\t", index=False)
     with pytest.raises(ValueError) as info:
         load_confounds(bad_nii)
     assert "more than one" in str(info.value)
@@ -473,10 +481,10 @@ def test_invalid_filetype(tmp_path, rng):
     assert "The confound file contains no header." in str(error_log.value)
 
     # invalid fmriprep version: old camel case header (<1.2)
-    leagal_confounds, _ = get_legal_confound()
-    camel_confounds = leagal_confounds.copy()
+    legal_confounds, _ = get_legal_confound()
+    camel_confounds = legal_confounds.copy()
     camel_confounds.columns = [
-        to_camel_case(col_name) for col_name in leagal_confounds.columns
+        to_camel_case(col_name) for col_name in legal_confounds.columns
     ]
     camel_confounds.to_csv(bad_conf, sep="\t", index=False)
     with pytest.raises(ValueError) as error_log:
